@@ -9,5 +9,9 @@ import (
 func main() {
 	http.HandleFunc("/health", handlers.HealthHandler)
 	log.Println("Server is starting ...")
-	http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":8080", nil)
+
+	if err != nil {
+		log.Fatal("Server error. Shutting down ...") // Print and Exit
+	}
 }
