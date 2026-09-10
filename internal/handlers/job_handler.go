@@ -47,3 +47,31 @@ func (h *JobHandler) CreateNewJob(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	w.Write(data)
 }
+
+func (h *JobHandler) GetJobById(w http.ResponseWriter, r *http.Request) {
+	jobId := r.PathValue("id")
+
+	job, err := h.service.GetJobById(r.Context(), jobId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	} else if job == nil {
+		http.Error(w, "no jobs found", http.StatusNotFound)
+		return
+	}
+
+	response := map[string]any{
+		"data":    job,
+		"message": "successful",
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, "json encoding failed", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}

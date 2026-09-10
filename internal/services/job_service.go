@@ -7,8 +7,8 @@ import (
 	"quocantran/gojob/internal/dtos"
 	"quocantran/gojob/internal/models"
 	"quocantran/gojob/internal/repositories"
-	"quocantran/gojob/pkg"
 	"strings"
+	"github.com/google/uuid"
 )
 
 type JobService struct {
@@ -53,14 +53,31 @@ func (s *JobService) CreateNewJob(ctx context.Context, jobType string, payload m
 	}
 
 	jobResponse := dtos.JobResponse{
-		ID:        job.ID,
-		Type:      job.Type,
-		Status:    string(job.Status),
-		Payload:   payloadMap,
-		Attempts:  job.Attempts,
-		CreatedAt: pkg.FormatVN(job.CreatedAt),
-		UpdatedAt: pkg.FormatVN(job.UpdatedAt),
+		ID:     job.ID,
+		Status: string(job.Status),
 	}
 
 	return &jobResponse, nil
+}
+
+func (s *JobService) GetJobById(ctx context.Context, id string) (*dtos.JobResponse, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, errors.New("invalid uuid format")
+	}
+
+	job, err := s.repository.GetJobById(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if job == nil {
+		return nil, nil
+	}
+
+	jobDto := dtos.JobResponse{
+		ID:     job.ID,
+		Status: string(job.Status),
+	}
+
+	return &jobDto, nil
 }

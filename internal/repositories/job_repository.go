@@ -2,9 +2,11 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"log"
 	"quocantran/gojob/internal/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -26,6 +28,12 @@ const (
 	available_at,
 	created_at, 
 	updated_at
+	`
+
+	getJobByIdQuery = `
+	select id, status
+	from jobs
+	where id = $1
 	`
 )
 
@@ -59,4 +67,22 @@ func (r *JobRepository) CreateNewJob(ctx context.Context, job *models.Job) (*mod
 	}
 
 	return &created, nil
+}
+
+func (r *JobRepository) GetJobById(ctx context.Context, id string) (*models.Job, error) {
+	row := r.db.QueryRow(ctx, getJobByIdQuery, id)
+
+	var job models.Job
+
+	err := row.Scan(&job.ID, &job.Status)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &job, nil
 }
