@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"quocantran/gojob/internal/database"
 	"quocantran/gojob/internal/handlers"
+	"quocantran/gojob/internal/repositories"
+	"quocantran/gojob/internal/routes"
+	"quocantran/gojob/internal/services"
 
 	"github.com/joho/godotenv"
 )
@@ -24,8 +27,14 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Jobs
+	jobRepository := repositories.NewJobRepository(pool)
+	jobService := services.NewJobService(jobRepository)
+	jobHandler := handlers.NewJobHandler(jobService)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handlers.HealthHandler)
+	routes.RegisterJobRoutes(mux, jobHandler)
 
 	log.Println("Server is starting ...")
 	err = http.ListenAndServe(":8080", mux)
