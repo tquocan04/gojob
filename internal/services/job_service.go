@@ -7,6 +7,7 @@ import (
 	"quocantran/gojob/internal/dtos"
 	"quocantran/gojob/internal/models"
 	"quocantran/gojob/internal/repositories"
+	"quocantran/gojob/pkg"
 	"strings"
 )
 
@@ -57,8 +58,8 @@ func (s *JobService) CreateNewJob(ctx context.Context, jobType string, payload m
 		Status:    string(job.Status),
 		Payload:   payloadMap,
 		Attempts:  job.Attempts,
-		CreatedAt: job.CreatedAt,
-		UpdatedAt: job.UpdatedAt,
+		CreatedAt: pkg.FormatVN(job.CreatedAt),
+		UpdatedAt: pkg.FormatVN(job.UpdatedAt),
 	}
 
 	return &jobResponse, nil
