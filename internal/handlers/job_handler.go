@@ -20,32 +20,18 @@ func (h *JobHandler) CreateNewJob(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 
 	if err != nil {
-		http.Error(w, "failed", http.StatusInternalServerError)
+		WriteError(w, http.StatusBadRequest, "failed to parse request body")
 		return
 	}
 
 	job, err := h.service.CreateNewJob(r.Context(), req.Type, req.Payload)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	response := map[string]any{
-		"status": "create successful",
-		"data":   job,
-	}
-
-	data, err := json.Marshal(response)
-
-	if err != nil {
-		http.Error(w, "json encoding failed", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	w.Write(data)
+	WriteJSON(w, http.StatusCreated, "create successful", job)
 }
 
 func (h *JobHandler) GetJobById(w http.ResponseWriter, r *http.Request) {
@@ -53,25 +39,12 @@ func (h *JobHandler) GetJobById(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.service.GetJobById(r.Context(), jobId)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	} else if job == nil {
-		http.Error(w, "no jobs found", http.StatusNotFound)
+		WriteError(w, http.StatusNotFound, "no jobs found")
 		return
 	}
 
-	response := map[string]any{
-		"data":    job,
-		"message": "successful",
-	}
-
-	data, err := json.Marshal(response)
-	if err != nil {
-		http.Error(w, "json encoding failed", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	WriteJSON(w, http.StatusOK, "successful", job)
 }
