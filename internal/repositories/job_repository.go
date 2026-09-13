@@ -6,6 +6,7 @@ import (
 	"log"
 	"quocantran/gojob/internal/models"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -33,6 +34,29 @@ const (
 	getJobByIdQuery = `
 	select id, status
 	from jobs
+	where id = $1
+	`
+
+	getQueuedJobQuery = `
+	select
+		id,
+		type,
+		payload,
+		status,
+		attempts,
+		max_attempts,
+		available_at,
+		created_at,
+		updated_at
+	from jobs
+	where status = 'queued'
+	order by created_at
+	limit 1
+	`
+
+	updateJobStatusQuery = `
+	update jobs
+	set status = $2, updated_at = now()
 	where id = $1
 	`
 )
@@ -85,4 +109,37 @@ func (r *JobRepository) GetJobById(ctx context.Context, id string) (*models.Job,
 	}
 
 	return &job, nil
+}
+
+func (r *JobRepository) GetQueuedJob(ctx context.Context) (*models.Job, error) {
+	row := r.db.QueryRow(ctx, getQueuedJobQuery)
+
+	var job models.Job
+
+	err := row.Scan(
+		&job.ID,
+		&job.Type,
+		&job.Payload,
+		&job.Status,
+		&job.Attempts,
+		&job.MaxAttempts,
+		&job.AvailableAt,
+		&job.CreatedAt,
+		&job.UpdatedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &job, nil
+}
+
+func (r *JobRepository) UpdateJobStatus(ctx context.Context, id uuid.UUID, status models.JobStatus) error {
+	_, err := r.db.Exec(ctx, updateJobStatusQuery, id, status)
+	return err
 }
