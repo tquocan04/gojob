@@ -44,7 +44,8 @@ func (w *Worker) Run(ctx context.Context) {
 
 			if job.Attempts < job.MaxAttempts {
 				job.Status = models.JobStatusQueued
-				log.Printf("Worker %d: job %s failed, retrying later (attempt %d/%d): %v\n", w.id, job.ID, job.Attempts, job.MaxAttempts, err)
+				job.AvailableAt = time.Now().Add(retryDelay(job.Attempts))
+				log.Printf("Worker %d: job %s failed, retrying at %s (attempt %d/%d): %v\n", w.id, job.ID, job.AvailableAt.Format("15:04:05"), job.Attempts, job.MaxAttempts, err)
 			} else {
 				job.Status = models.JobStatusFailed
 				log.Printf("Worker %d: job %s failed (attempt %d/%d): %v\n", w.id, job.ID, job.Attempts, job.MaxAttempts, err)
@@ -54,9 +55,18 @@ func (w *Worker) Run(ctx context.Context) {
 			log.Printf("Worker %d: job %s completed\n", w.id, job.ID)
 		}
 
-		err = w.repository.UpdateJobStatus(ctx, job.ID, job.Status, job.Attempts)
+		err = w.repository.UpdateJobStatus(ctx, job.ID, job.Status, job.Attempts, job.AvailableAt)
 		if err != nil {
 			log.Printf("Worker %d: failed to update job status: %v\n", w.id, err)
 		}
 	}
+}
+
+func retryDelay(attempt int) time.Duration {
+	// avoid panic with negative number case
+	if attempt <= 0 {
+		return 1 * time.Second
+	}
+
+	return time.Duration(1<<(attempt-1)) * time.Second
 }
