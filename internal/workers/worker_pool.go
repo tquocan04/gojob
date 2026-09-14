@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"log"
+	"quocantran/gojob/internal/processors"
 	"quocantran/gojob/internal/repositories"
 	"sync"
 )
@@ -10,10 +11,11 @@ import (
 type WorkerPool struct {
 	repository  *repositories.JobRepository
 	workerCount int
+	processor   *processors.JobProcessor
 }
 
-func NewWorkerPool(repository *repositories.JobRepository, workerCount int) *WorkerPool {
-	return &WorkerPool{repository: repository, workerCount: workerCount}
+func NewWorkerPool(repository *repositories.JobRepository, workerCount int, processor *processors.JobProcessor) *WorkerPool {
+	return &WorkerPool{repository: repository, workerCount: workerCount, processor: processor}
 }
 
 func (p *WorkerPool) Run(ctx context.Context) {
@@ -24,7 +26,7 @@ func (p *WorkerPool) Run(ctx context.Context) {
 	for i := 1; i <= p.workerCount; i++ {
 		wg.Add(1)
 
-		worker := NewWorker(i, p.repository)
+		worker := NewWorker(i, p.repository, p.processor)
 
 		go func() {
 			defer wg.Done()

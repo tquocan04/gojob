@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"quocantran/gojob/internal/database"
+	"quocantran/gojob/internal/processors"
 	"quocantran/gojob/internal/repositories"
 	"quocantran/gojob/internal/workers"
 
@@ -25,7 +26,8 @@ func main() {
 	defer pool.Close()
 
 	jobRepository := repositories.NewJobRepository(pool)
+	jobProcessor := processors.NewJobProcessor()
 
-	workerPool := workers.NewWorkerPool(jobRepository, 1)
+	workerPool := workers.NewWorkerPool(jobRepository, 1, jobProcessor)
 	workerPool.Run(ctx)
 }

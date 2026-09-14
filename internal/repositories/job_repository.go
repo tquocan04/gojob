@@ -56,7 +56,7 @@ const (
 
 	updateJobStatusQuery = `
 	update jobs
-	set status = $2, updated_at = now()
+	set status = $2, attempts = $3, updated_at = now()
 	where id = $1
 	`
 )
@@ -139,7 +139,7 @@ func (r *JobRepository) GetQueuedJob(ctx context.Context) (*models.Job, error) {
 	return &job, nil
 }
 
-func (r *JobRepository) UpdateJobStatus(ctx context.Context, id uuid.UUID, status models.JobStatus) error {
-	_, err := r.db.Exec(ctx, updateJobStatusQuery, id, status)
+func (r *JobRepository) UpdateJobStatus(ctx context.Context, id uuid.UUID, status models.JobStatus, attempts int) error {
+	_, err := r.db.Exec(ctx, updateJobStatusQuery, id, status, attempts)
 	return err
 }
