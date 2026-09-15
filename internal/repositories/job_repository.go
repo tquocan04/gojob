@@ -38,6 +38,36 @@ const (
 	where id = $1
 	`
 
+	claimQueuedJobQuery = `
+	select
+		id,
+		type,
+		payload,
+		status,
+		attempts,
+		max_attempts,
+		available_at,
+		locked_at,
+		created_at,
+		updated_at
+	from jobs
+	where status = 'queued'
+		and available_at <= now()
+	order by created_at
+	limit 1
+	for update skip locked
+	`
+
+claimQueuedJobUpdateQuery = `
+	update jobs
+	set status = 'processing',
+		attempts = attempts + 1,
+		locked_at = now(),
+		updated_at = now()
+	where id = $1
+	returning attempts
+	`
+
 	getQueuedJobQuery = `
 	select
 		id,
@@ -135,6 +165,51 @@ func (r *JobRepository) GetQueuedJob(ctx context.Context) (*models.Job, error) {
 	}
 
 	if err != nil {
+		return nil, err
+	}
+
+	return &job, nil
+}
+
+// ClaimQueuedJob atomically finds a queued job and claims it in a single
+// transaction using select ... for update skip locked, so each job is
+// only claimed by one worker.
+func (r *JobRepository) ClaimQueuedJob(ctx context.Context) (*models.Job, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var job models.Job
+
+	err = tx.QueryRow(ctx, claimQueuedJobQuery).Scan(
+		&job.ID,
+		&job.Type,
+		&job.Payload,
+		&job.Status,
+		&job.Attempts,
+		&job.MaxAttempts,
+		&job.AvailableAt,
+		&job.LockedAt,
+		&job.CreatedAt,
+		&job.UpdatedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.QueryRow(ctx, claimQueuedJobUpdateQuery, job.ID).Scan(&job.Attempts)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 

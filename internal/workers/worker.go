@@ -25,23 +25,28 @@ func (w *Worker) Run(ctx context.Context) {
 	log.Printf("Worker %d is starting ...\n", w.id)
 
 	for {
-		job, err := w.repository.GetQueuedJob(ctx)
+		select {
+		case <-ctx.Done():
+			log.Printf("Worker %d is shutting down ...\n", w.id)
+			return
+		default:
+		}
+
+		job, err := w.repository.ClaimQueuedJob(ctx)
 		if err != nil {
-			log.Printf("Worker %d: failed to get a job: %v\n", w.id, err)
+			log.Printf("Worker %d: failed to claim a job: %v\n", w.id, err)
 			time.Sleep(pollInterval)
 			continue
 		}
 
 		if job == nil {
-			log.Printf("Worker %d: no queued job, waiting ...\n", w.id)
+			log.Printf("Worker %d: no queued job to claim, waiting ...\n", w.id)
 			time.Sleep(pollInterval)
 			continue
 		}
 
 		err = w.processor.Process(ctx, job)
 		if err != nil {
-			job.Attempts++
-
 			if job.Attempts < job.MaxAttempts {
 				job.Status = models.JobStatusQueued
 				job.AvailableAt = time.Now().Add(retryDelay(job.Attempts))
