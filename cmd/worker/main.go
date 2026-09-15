@@ -28,6 +28,9 @@ func main() {
 	jobRepository := repositories.NewJobRepository(pool)
 	jobProcessor := processors.NewJobProcessor()
 
-	workerPool := workers.NewWorkerPool(jobRepository, 1, jobProcessor)
+	recoveryWorker := workers.NewRecoveryWorker(jobRepository)
+	go recoveryWorker.Run(ctx)
+
+	workerPool := workers.NewWorkerPool(jobRepository, 3, jobProcessor)
 	workerPool.Run(ctx)
 }

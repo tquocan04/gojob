@@ -91,6 +91,21 @@ claimQueuedJobUpdateQuery = `
 	set status = $2, attempts = $3, available_at = $4, updated_at = now()
 	where id = $1
 	`
+
+	// requeueStaleJobsQuery (Crash Recovery):
+	// Finds jobs stuck in 'processing' longer than the stale threshold $1
+	// (locked_at too old) => the previous worker crashed or was killed mid-processing.
+	// Moves the job back to 'queued' with available_at = now() (immediately claimable) and clears locked_at.
+	// Does NOT touch attempts: recovery is not a processing attempt.
+	requeueStaleJobsQuery = `
+	update jobs
+	set status = 'queued',
+		available_at = now(),
+		locked_at = null,
+		updated_at = now()
+	where status = 'processing'
+		and locked_at < now() - $1::interval
+	`
 )
 
 func NewJobRepository(db *pgxpool.Pool) *JobRepository { // Constructor, Dependency Injection
@@ -179,7 +194,7 @@ func (r *JobRepository) ClaimQueuedJob(ctx context.Context) (*models.Job, error)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) // if the transaction is not committed, undo everything
 
 	var job models.Job
 
@@ -197,7 +212,7 @@ func (r *JobRepository) ClaimQueuedJob(ctx context.Context) (*models.Job, error)
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return nil, nil // no job available -> nil, the worker waits for the next round
 	}
 
 	if err != nil {
@@ -219,4 +234,20 @@ func (r *JobRepository) ClaimQueuedJob(ctx context.Context) (*models.Job, error)
 func (r *JobRepository) UpdateJobStatus(ctx context.Context, id uuid.UUID, status models.JobStatus, attempts int, availableAt time.Time) error {
 	_, err := r.db.Exec(ctx, updateJobStatusQuery, id, status, attempts, availableAt)
 	return err
+}
+
+// RequeueStaleJobs moves jobs stuck in 'processing' past the stale timeout
+// back to 'queued' (with locked_at cleared) so they can be claimed again.
+// It does not change attempts.
+func (r *JobRepository) RequeueStaleJobs(ctx context.Context, staleAfter time.Duration) (int, error) {
+	// A single UPDATE is inherently atomic: running it twice in a row finds no
+	// more rows on the second pass (jobs are already 'queued'), so nothing is
+	// requeued twice. staleAfter is the stale threshold, e.g. 30s => any job
+	// with locked_at < now() - 30s.
+	tag, err := r.db.Exec(ctx, requeueStaleJobsQuery, staleAfter)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(tag.RowsAffected()), nil
 }

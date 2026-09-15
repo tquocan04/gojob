@@ -6,6 +6,8 @@ import (
 	"quocantran/gojob/internal/models"
 	"quocantran/gojob/internal/processors"
 	"quocantran/gojob/internal/repositories"
+	"quocantran/gojob/pkg"
+	"strings"
 	"time"
 )
 
@@ -45,12 +47,15 @@ func (w *Worker) Run(ctx context.Context) {
 			continue
 		}
 
+		log.Printf("Worker %d: claimed job %s at %s (status=%s, locked_at set, attempt #%d)\n",
+			w.id, job.ID, pkg.FormatVN(time.Now()), strings.ToLower(string(models.JobStatusProcessing)), job.Attempts)
+
 		err = w.processor.Process(ctx, job)
 		if err != nil {
 			if job.Attempts < job.MaxAttempts {
 				job.Status = models.JobStatusQueued
 				job.AvailableAt = time.Now().Add(retryDelay(job.Attempts))
-				log.Printf("Worker %d: job %s failed, retrying at %s (attempt %d/%d): %v\n", w.id, job.ID, job.AvailableAt.Format("15:04:05"), job.Attempts, job.MaxAttempts, err)
+				log.Printf("Worker %d: job %s failed, retrying at %s (attempt %d/%d): %v\n", w.id, job.ID, pkg.FormatVN(job.AvailableAt), job.Attempts, job.MaxAttempts, err)
 			} else {
 				job.Status = models.JobStatusFailed
 				log.Printf("Worker %d: job %s failed (attempt %d/%d): %v\n", w.id, job.ID, job.Attempts, job.MaxAttempts, err)
@@ -59,6 +64,9 @@ func (w *Worker) Run(ctx context.Context) {
 			job.Status = models.JobStatusCompleted
 			log.Printf("Worker %d: job %s completed\n", w.id, job.ID)
 		}
+
+		log.Printf("Worker %d: processing finished, updating job %s to status=%s (attempt #%d) at %s\n",
+			w.id, job.ID, job.Status, job.Attempts, pkg.FormatVN(time.Now()))
 
 		err = w.repository.UpdateJobStatus(ctx, job.ID, job.Status, job.Attempts, job.AvailableAt)
 		if err != nil {
