@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"quocantran/gojob/internal/database"
 	"quocantran/gojob/internal/handlers"
 	"quocantran/gojob/internal/repositories"
 	"quocantran/gojob/internal/routes"
 	"quocantran/gojob/internal/services"
+	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -19,12 +24,16 @@ func main() {
 		log.Println("Env not found")
 	}
 
-	ctx := context.Background()
+	// Create a context cancelled by SIGINT (Ctrl+C) or SIGTERM so the server
+	// can stop accepting new requests and drain in-flight ones gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	pool, err := database.NewPostgresPool(ctx)
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
 	}
+	// Close the db pool only after the http server has fully stopped.
 	defer pool.Close()
 
 	// Jobs
@@ -36,10 +45,31 @@ func main() {
 	mux.HandleFunc("/health", handlers.HealthHandler)
 	routes.RegisterJobRoutes(mux, jobHandler)
 
-	log.Println("Server is starting ...")
-	err = http.ListenAndServe(":8080", mux)
+	srv := &http.Server{Addr: ":8080", Handler: mux}
 
-	if err != nil {
-		log.Fatal("Server error. Shutting down ...") // Print and Exit
+	// Serve in a goroutine so the main flow can block on either a shutdown
+	// signal or an unexpected server error.
+	errCh := make(chan error, 1)
+	go func() {
+		log.Println("Server is starting ...")
+		errCh <- srv.ListenAndServe()
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Println("Server is shutting down: refusing new requests, waiting for in-flight handlers ...")
+
+		// Give in-flight requests a grace period to complete before force-closing.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Graceful shutdown failed: %v\n", err)
+		}
+		log.Println("Server shut down cleanly")
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal("Server error: ", err)
+		}
 	}
 }
