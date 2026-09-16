@@ -20,3 +20,6 @@ migration-up:
 
 migration-down:
 	migrate -path $(MIGRATIONS_DIR) -database "$(CONN_STRING)" down
+
+run-worker:
+	go run ./cmd/worker
