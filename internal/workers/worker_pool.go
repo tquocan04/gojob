@@ -3,18 +3,16 @@ package workers
 import (
 	"context"
 	"log"
-	"quocantran/gojob/internal/processors"
-	"quocantran/gojob/internal/repositories"
 	"sync"
 )
 
 type WorkerPool struct {
-	repository  *repositories.JobRepository
+	repository  JobClaimer
 	workerCount int
-	processor   *processors.JobProcessor
+	processor   JobProcessor
 }
 
-func NewWorkerPool(repository *repositories.JobRepository, workerCount int, processor *processors.JobProcessor) *WorkerPool {
+func NewWorkerPool(repository JobClaimer, workerCount int, processor JobProcessor) *WorkerPool {
 	return &WorkerPool{repository: repository, workerCount: workerCount, processor: processor}
 }
 

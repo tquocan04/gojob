@@ -4,8 +4,6 @@ import (
 	"context"
 	"log"
 	"quocantran/gojob/internal/models"
-	"quocantran/gojob/internal/processors"
-	"quocantran/gojob/internal/repositories"
 	"quocantran/gojob/pkg"
 	"strings"
 	"time"
@@ -15,11 +13,11 @@ const pollInterval = 60 * time.Second
 
 type Worker struct {
 	id         int
-	repository *repositories.JobRepository
-	processor  *processors.JobProcessor
+	repository JobClaimer
+	processor  JobProcessor
 }
 
-func NewWorker(id int, repository *repositories.JobRepository, processor *processors.JobProcessor) *Worker {
+func NewWorker(id int, repository JobClaimer, processor JobProcessor) *Worker {
 	return &Worker{id: id, repository: repository, processor: processor}
 }
 
