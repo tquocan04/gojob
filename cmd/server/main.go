@@ -19,9 +19,8 @@ import (
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("Env not found")
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("Warning: could not load .env file: %v", err)
 	}
 
 	// Create a context cancelled by SIGINT (Ctrl+C) or SIGTERM so the server
