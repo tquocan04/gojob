@@ -1,0 +1,7 @@
+.git
+.env
+.air.toml
+Makefile
+tmp/
+*.md
+*.log
